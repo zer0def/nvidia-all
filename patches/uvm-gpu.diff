@@ -1,0 +1,37 @@
+--- a/nvidia-uvm/uvm8_gpu.c
++++ b/nvidia-uvm/uvm8_gpu.c
+@@ -3069,16 +3069,17 @@ out:
+ 
+ NV_STATUS uvm_gpu_map_cpu_pages(uvm_gpu_t *gpu, struct page *page, size_t size, NvU64 *dma_addr_out)
+ {
+-    NvU64 dma_addr = pci_map_page(gpu->parent->pci_dev, page, 0, size, PCI_DMA_BIDIRECTIONAL);
++    NvU64 dma_addr;
+ 
+     UVM_ASSERT(PAGE_ALIGNED(size));
+ 
+-    if (pci_dma_mapping_error(gpu->parent->pci_dev, dma_addr))
++    dma_addr = dma_map_page(&gpu->parent->pci_dev->dev, page, 0, size, DMA_BIDIRECTIONAL);
++    if (dma_mapping_error(&gpu->parent->pci_dev->dev, dma_addr))
+         return NV_ERR_OPERATING_SYSTEM;
+ 
+     if (dma_addr < gpu->parent->dma_addressable_start ||
+         dma_addr + size - 1 > gpu->parent->dma_addressable_limit) {
+-        pci_unmap_page(gpu->parent->pci_dev, dma_addr, size, PCI_DMA_BIDIRECTIONAL);
++        dma_unmap_page(&gpu->parent->pci_dev->dev, dma_addr, size, DMA_BIDIRECTIONAL);
+         UVM_ERR_PRINT_RL("PCI mapped range [0x%llx, 0x%llx) not in the addressable range [0x%llx, 0x%llx), GPU %s\n",
+                          dma_addr,
+                          dma_addr + (NvU64)size,
+@@ -3109,11 +3109,12 @@ NV_STATUS uvm_gpu_map_cpu_pages(uvm_gpu_
+ void uvm_gpu_unmap_cpu_pages(uvm_gpu_t *gpu, NvU64 dma_address, size_t size)
+ {
+     UVM_ASSERT(PAGE_ALIGNED(size));
++    UVM_ASSERT(dma_address <= dma_address + gpu->parent->dma_addressable_start);
+ 
+     if (gpu->parent->npu)
+         dma_address = nv_expand_nvlink_addr(dma_address);
+     dma_address += gpu->parent->dma_addressable_start;
+-    pci_unmap_page(gpu->parent->pci_dev, dma_address, size, PCI_DMA_BIDIRECTIONAL);
++    dma_unmap_page(&gpu->parent->pci_dev->dev, dma_address, size, DMA_BIDIRECTIONAL);
+     atomic64_sub(size, &gpu->parent->mapped_cpu_pages_size);
+ }
+ 

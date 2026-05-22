@@ -1,0 +1,116 @@
+--- a/conftest.sh
++++ b/conftest.sh
+@@ -3626,6 +3626,24 @@ compile_test() {
+             compile_check_conftest "$CODE" "NV_DRM_DRIVER_PRIME_FLAG_PRESENT" "" "types"
+         ;;
+ 
++        follow_pfn)
++            #
++            # Determine if follow_pfn() is present.
++            #
++            # follow_pfn() was added by commit 3b6748e2dd69
++            # ("mm: introduce follow_pfn()") in v2.6.31-rc1, and removed
++            # by commit 233eb0bf3b94 ("mm: remove follow_pfn")
++            # from linux-next 233eb0bf3b94.
++            #
++            CODE="
++            #include <linux/mm.h>
++            void conftest_follow_pfn(void) {
++                follow_pfn();
++            }"
++
++            compile_check_conftest "$CODE" "NV_FOLLOW_PFN_PRESENT" "" "functions"
++        ;;
++
+         drm_connector_for_each_possible_encoder)
+             #
+             # Determine the number of arguments of the
+--- a/nvidia/nvidia.Kbuild
++++ b/nvidia/nvidia.Kbuild
+@@ -153,6 +153,7 @@ NV_CONFTEST_FUNCTION_COMPILE_TESTS += dm
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += get_task_ioprio
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += iterate_fd
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += seq_read_iter
++NV_CONFTEST_FUNCTION_COMPILE_TESTS += follow_pfn
+ 
+ NV_CONFTEST_SYMBOL_COMPILE_TESTS += is_export_symbol_gpl_of_node_to_nid
+ NV_CONFTEST_SYMBOL_COMPILE_TESTS += is_export_symbol_gpl_sme_active
+--- a/vvidia/os-mlock.c
++++ b/nvidia/os-mlock.c
+@@ -14,6 +14,17 @@
+ #include "os-interface.h"
+ #include "nv-linux.h"
+ 
++static inline int nv_follow_pfn(struct vm_area_struct *vma,
++                                unsigned long address,
++                                unsigned long *pfn)
++{
++#if defined(NV_FOLLOW_PFN_PRESENT)
++    return follow_pfn(vma, address, pfn);
++#else
++    return -1;
++#endif
++}
++
+ NV_STATUS NV_API_CALL os_lookup_user_io_memory(
+     void   *address,
+     NvU64   page_count,
+@@ -21,11 +32,11 @@ NV_STATUS NV_API_CALL os_lookup_user_io_
+ )
+ {
+     NV_STATUS rmStatus;
+-    int ret;
+     struct mm_struct *mm = current->mm;
+     struct vm_area_struct *vma;
+     unsigned long pfn;
+     NvU64 i;
++    NvUPtr start = (NvUPtr)address;
+ 
+     if (!NV_MAY_SLEEP())
+     {
+@@ -34,8 +45,7 @@ NV_STATUS NV_API_CALL os_lookup_user_io_
+         return NV_ERR_NOT_SUPPORTED;
+     }
+ 
+-    rmStatus = os_alloc_mem((void **)pte_array,
+-            (page_count * sizeof(NvU64)));
++    rmStatus = os_alloc_mem((void **)pte_array, (page_count * sizeof(NvU64)));
+     if (rmStatus != NV_OK)
+     {
+         nv_printf(NV_DBG_ERRORS,
+@@ -45,18 +55,30 @@ NV_STATUS NV_API_CALL os_lookup_user_io_
+ 
+     nv_mmap_read_lock(mm);
+ 
+-    vma = find_vma(mm, (NvUPtr)address);
+-    if ((vma == NULL) || ((vma->vm_flags & (VM_IO | VM_PFNMAP)) == 0))
++    // find the first VMA which intersects the interval start_addr..end_addr-1,
++    vma = find_vma_intersection(mm, start, start+1);
++
++    // Verify that the given address range is contained in a single vma
++    if ((vma == NULL) || ((vma->vm_flags & (VM_IO | VM_PFNMAP)) == 0) ||
++            !((vma->vm_start <= start) &&
++              ((vma->vm_end - start) >> PAGE_SHIFT >= page_count)))
++    {
++        nv_printf(NV_DBG_ERRORS,
++                "Cannot map memory with base addr 0x%llx and size of 0x%llx pages\n",
++                start ,page_count);
++        rmStatus = NV_ERR_INVALID_ADDRESS;
++        goto done;
++    }
++
++    if (nv_follow_pfn(vma, start, &pfn) < 0)
+     {
+-        os_free_mem(*pte_array);
+         rmStatus = NV_ERR_INVALID_ADDRESS;
+         goto done;
+     }
+ 
+     for (i = 0; i < page_count; i++)
+     {
+-        ret = follow_pfn(vma, ((NvUPtr)address + (i * PAGE_SIZE)), &pfn);
+-        if (ret < 0)
++        if (nv_follow_pfn(vma, (start + (i * PAGE_SIZE)), &pfn) < 0)
+         {
+             os_free_mem(*pte_array);
+             rmStatus = NV_ERR_INVALID_ADDRESS;

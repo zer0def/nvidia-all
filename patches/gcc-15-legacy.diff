@@ -1,0 +1,48 @@
+From 610f6f8a297e6d4b3457c46d73611edb9e46405c Mon Sep 17 00:00:00 2001
+From: Peter Jung <admin@ptr1337.dev>
+Date: Tue, 29 Apr 2025 11:24:31 +0200
+Subject: [PATCH] CFLAGS: Set -std=gnu17 for all compilation flags
+
+GCC15 uses C23 by default, which breaks a lot of compatibility with the
+kernel and this module. Explicitly use -std=gnu17, which was the default in
+GCC14.
+
+Signed-off-by: Peter Jung <admin@ptr1337.dev>
+Signed-off-by: Eric Naim <dnaim@cachyos.org>
+---
+ kernel-dkms/Kbuild      | 1 +
+ kernel-dkms/conftest.sh | 4 ++--
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/kernel-dkms/Kbuild b/kernel-dkms/Kbuild
+index bf06edb7..6cbc79d3 100644
+--- a/kernel-dkms/Kbuild
++++ b/kernel-dkms/Kbuild
+@@ -82,5 +82,6 @@ $(foreach _module, $(NV_KERNEL_MODULES), \
+ # $(ccflags-y) to ccflags-y for compatibility.
+ #
+
++ccflags-y += -std=gnu17
+ ccflags-y += -I$(src)/common/inc
+ ccflags-y += -I$(src)
+diff --git a/kernel-dkms/conftest.sh b/kernel-dkms/conftest.sh
+index 20f694ec..0019e67c 100755
+--- a/kernel-dkms/conftest.sh
++++ b/kernel-dkms/conftest.sh
+@@ -71,7 +71,7 @@ translate_and_preprocess_header_files()
+     # or more occurrences of "-MD" or "-MG", surrounded by whitespace to avoid
+     # accidental matches with tokens that happen to contain either of those
+     # strings, without special handling of the beginning or the end of the line.
+-    TEST_CFLAGS=`echo "-E -M $CFLAGS " | sed -e 's/\( -M[DG]\)* / /g'`
++    TEST_CFLAGS=`echo "-std=gnu17 -E -M $CFLAGS " | sed -e 's/\( -M[DG]\)* / /g'`
+ 
+     for file in $@; do
+         local file_define=NV_`echo $file | tr '/.' '_' | tr '-' '_' | tr 'a-z' 'A-Z'`_PRESENT
+@@ -94,6 +94,6 @@ test_header_presence() {
+
+ build_cflags() {
+-    BASE_CFLAGS="-O2 -D__KERNEL__ \
++    BASE_CFLAGS="-std=gnu17 -O2 -D__KERNEL__ \
+ -DKBUILD_BASENAME=\"#conftest$$\" -DKBUILD_MODNAME=\"#conftest$$\" \
+ -nostdinc -isystem $ISYSTEM \
+ -Wno-implicit-function-declaration -Wno-strict-prototypes"

@@ -1,0 +1,364 @@
+--- a/conftest.sh
++++ b/conftest.sh
+@@ -154,6 +154,8 @@ test_headers() {
+     FILES="$FILES sound/hdaudio.h"
+     FILES="$FILES asm/pgtable_types.h"
+     FILES="$FILES linux/dma-map-ops.h"
++    FILES="$FILES linux/stdarg.h"
++    FILES="$FILES linux/iosys-map.h"
+ 
+     translate_and_preprocess_header_files $FILES
+ }
+@@ -3199,6 +3199,149 @@ compile_test() {
+             compile_check_conftest "$CODE" "NV_DMA_BUF_OWNER_PRESENT" "" "types"
+         ;;
+ 
++        drm_plane_atomic_check_has_atomic_state_arg)
++            #
++            # Determine if drm_plane_helper_funcs::atomic_check takes 'state'
++            # argument of 'struct drm_atomic_state' type.
++            #
++            # The commit 7c11b99a8e58 ("drm/atomic: Pass the full state to
++            # planes atomic_check") passed the full atomic state to
++            # drm_plane_helper_funcs::atomic_check()
++            #
++            # Turning incompatible-pointer-types check into error is necessary
++            # to make test fail if drm_plane_helper_funcs::atomic_check is taking
++            # 'plane_state' instead of 'state', otherwise test simply pass
++            # because compilation succeeds throwing incompatible-pointer-types
++            # warning. This test is expected to fail on Linux kernels <= v5.10,
++            # the commit ea8daa7b9784 ("kbuild: Add option to turn incompatible
++            # pointer check into error") has turned incompatible-pointer-types
++            # check into error from v4.6.
++            #
++            echo "$CONFTEST_PREAMBLE
++            #include <drm/drm_modeset_helper_vtables.h>
++            int conftest_drm_plane_atomic_check_has_atomic_state_arg(
++                    struct drm_plane *plane, struct drm_atomic_state *state) {
++                const struct drm_plane_helper_funcs *funcs = plane->helper_private;
++                return funcs->atomic_check(plane, state);
++            }" > conftest$$.c
++
++            $CC $CFLAGS -Werror=incompatible-pointer-types -c conftest$$.c > /dev/null 2>&1
++            rm -f conftest$$.c
++
++            if [ -f conftest$$.o ]; then
++                rm -f conftest$$.o
++                echo "#define NV_DRM_PLANE_ATOMIC_CHECK_HAS_ATOMIC_STATE_ARG" | append_conftest "types"
++            else
++                echo "#undef NV_DRM_PLANE_ATOMIC_CHECK_HAS_ATOMIC_STATE_ARG" | append_conftest "types"
++            fi
++        ;;
++
++        drm_device_has_pdev)
++            #
++            # Determine if the 'drm_device' structure has a 'pdev' field.
++            #
++            # Removed by commit b347e04452ff ("drm: Remove pdev field from
++            # struct drm_device") in v5.14-rc1.
++            #
++            CODE="
++            #if defined(NV_DRM_DRMP_H_PRESENT)
++            #include <drm/drmP.h>
++            #endif
++
++            #if defined(NV_DRM_DRM_DEVICE_H_PRESENT)
++            #include <drm/drm_device.h>
++            #endif
++
++            int conftest_drm_device_has_pdev(void) {
++                return offsetof(struct drm_device, pdev);
++            }"
++
++            compile_check_conftest "$CODE" "NV_DRM_DEVICE_HAS_PDEV" "" "types"
++        ;;
++
++        dma_resv_add_fence)
++            #
++            # Determine if the dma_resv_add_fence() function is present.
++            #
++            # dma_resv_add_excl_fence() and dma_resv_add_shared_fence() were
++            # removed and replaced with dma_resv_add_fence() by commit
++            # 73511edf8b19 ("dma-buf: specify usage while adding fences to
++            # dma_resv obj v7") in linux-next, expected in v5.19-rc1.
++            #
++            CODE="
++            #if defined(NV_LINUX_DMA_RESV_H_PRESENT)
++            #include <linux/dma-resv.h>
++            #endif
++            void conftest_dma_resv_add_fence(void) {
++                dma_resv_add_fence();
++            }"
++
++            compile_check_conftest "$CODE" "NV_DMA_RESV_ADD_FENCE_PRESENT" "" "functions"
++        ;;
++
++        drm_connector_has_override_edid)
++            #
++            # Determine if 'struct drm_connector' has an 'override_edid' member.
++            #
++            # Removed by commit 90b575f52c6ab ("drm/edid: detach debugfs EDID
++            # override from EDID property update") in linux-next, expected in
++            # v6.2-rc1.
++            #
++            CODE="
++            #if defined(NV_DRM_DRM_CRTC_H_PRESENT)
++            #include <drm/drm_crtc.h>
++            #endif
++            #if defined(NV_DRM_DRM_CONNECTOR_H_PRESENT)
++            #include <drm/drm_connector.h>
++            #endif
++            int conftest_drm_connector_has_override_edid(void) {
++                return offsetof(struct drm_connector, override_edid);
++            }"
++
++            compile_check_conftest "$CODE" "NV_DRM_CONNECTOR_HAS_OVERRIDE_EDID" "" "types"
++        ;;
++
++        drm_output_poll_changed)
++            #
++            # Determine whether drm_mode_config_funcs.output_poll_changed
++            # callback is present
++            #
++            # Removed by commit 446d0f4849b1 ("drm: Remove struct
++            # drm_mode_config_funcs.output_poll_changed") in v6.12. Hotplug
++            # event support is handled through the fbdev emulation interface
++            # going forward.
++            #
++            CODE="
++            #include <drm/drm_mode_config.h>
++            int conftest_drm_output_poll_changed_available(void) {
++                return offsetof(struct drm_mode_config_funcs, output_poll_changed);
++            }"
++
++            compile_check_conftest "$CODE" "NV_DRM_OUTPUT_POLL_CHANGED_PRESENT" "" "types"
++        ;;
++
++        drm_driver_has_date)
++            #
++            # Determine if the 'drm_driver' structure has a 'date' field.
++            #
++            # Removed by commit cb2e1c2136f7 ("drm: remove driver date from
++            # struct drm_driver and all drivers") in linux-next, expected in
++            # v6.14.
++            #
++            CODE="
++            #if defined(NV_DRM_DRMP_H_PRESENT)
++            #include <drm/drmP.h>
++            #endif
++
++            #include <drm/drm_drv.h>
++
++            int conftest_drm_driver_has_date(void) {
++                return offsetof(struct drm_driver, date);
++            }"
++
++            compile_check_conftest "$CODE" "NV_DRM_DRIVER_HAS_DATE" "" "types"
++        ;;
++
+         drm_connector_funcs_have_mode_in_name)
+             #
+             # Determine if _mode_ is present in connector function names.  We
+--- a/nvidia-drm/nvidia-dma-resv-helper.h
++++ b/nvidia-drm/nvidia-dma-resv-helper.h
+@@ -69,7 +69,11 @@ static inline void nv_dma_resv_add_excl_
+                                               nv_dma_fence_t *fence)
+ {
+ #if defined(NV_LINUX_DMA_RESV_H_PRESENT)
++#if defined(NV_DMA_RESV_ADD_FENCE_PRESENT)
++    dma_resv_add_fence(obj, fence, DMA_RESV_USAGE_WRITE);
++#else
+     dma_resv_add_excl_fence(obj, fence);
++#endif
+ #else
+     reservation_object_add_excl_fence(obj, fence);
+ #endif
+--- a/nvidia-drm/nvidia-drm-connector.c
++++ b/nvidia-drm/nvidia-drm-connector.c
+@@ -44,6 +44,7 @@
+ 
+ #include <drm/drm_atomic.h>
+ #include <drm/drm_atomic_helper.h>
++#include <drm/drm_edid.h>
+ 
+ #include <linux/version.h>
+ 
+@@ -100,7 +103,11 @@ __nv_drm_detect_encoder(struct NvKmsKapi
+             break;
+     }
+ 
++#if defined(NV_DRM_CONNECTOR_HAS_OVERRIDE_EDID)
+     if (connector->override_edid) {
++#else
++    if (drm_edid_override_connector_update(connector) > 0) {
++#endif
+         const struct drm_property_blob *edid = connector->edid_blob_ptr;
+ 
+         if (edid->length <= sizeof(pDetectParams->edid.buffer)) {
+--- a/nvidia-drm/nvidia-drm-crtc.c
++++ b/nvidia-drm/nvidia-drm-crtc.c
+@@ -175,9 +175,18 @@ plane_req_config_update(struct drm_plane
+         old_config.dstHeight != req_config->config.dstHeight;
+ }
+ 
++#if defined(NV_DRM_PLANE_ATOMIC_CHECK_HAS_ATOMIC_STATE_ARG)
++static int nv_drm_plane_atomic_check(struct drm_plane *plane,
++                                     struct drm_atomic_state *state)
++#else
+ static int nv_drm_plane_atomic_check(struct drm_plane *plane,
+                                      struct drm_plane_state *plane_state)
++#endif
+ {
++#if defined(NV_DRM_PLANE_ATOMIC_CHECK_HAS_ATOMIC_STATE_ARG)
++    struct drm_plane_state *plane_state =
++        drm_atomic_get_new_plane_state(state, plane);
++#endif
+     int i;
+     struct drm_crtc *crtc;
+     struct drm_crtc_state *crtc_state;
+@@ -211,6 +220,7 @@ done:
+     return 0;
+ }
+ 
++#if !defined(NV_DRM_PLANE_ATOMIC_CHECK_HAS_ATOMIC_STATE_ARG)
+ static void nv_drm_plane_atomic_update(struct drm_plane *plane,
+                                        struct drm_plane_state *old_state)
+ {
+@@ -220,6 +230,7 @@ static void nv_drm_plane_atomic_disable(
+                                         struct drm_plane_state *old_state)
+ {
+ }
++#endif
+ 
+ static const struct drm_plane_funcs nv_plane_funcs = {
+     .update_plane           = drm_atomic_helper_update_plane,
+@@ -232,8 +243,10 @@ static const struct drm_plane_funcs nv_p
+ 
+ static const struct drm_plane_helper_funcs nv_plane_helper_funcs = {
+     .atomic_check   = nv_drm_plane_atomic_check,
++#if !defined(NV_DRM_PLANE_ATOMIC_CHECK_HAS_ATOMIC_STATE_ARG)
+     .atomic_update  = nv_drm_plane_atomic_update,
+     .atomic_disable = nv_drm_plane_atomic_disable,
++#endif
+ };
+ 
+ static void nv_drm_crtc_destroy(struct drm_crtc *crtc)
+--- a/nvidia-drm/nvidia-drm-drv.c
++++ b/nvidia-drm/nvidia-drm-drv.c
+@@ -87,6 +87,7 @@ static struct nv_drm_device *dev_list =
+ 
+ #if defined(NV_DRM_ATOMIC_MODESET_AVAILABLE)
+ 
++#if defined(NV_DRM_OUTPUT_POLL_CHANGED_PRESENT)
+ static void nv_drm_output_poll_changed(struct drm_device *dev)
+ {
+     struct drm_connector *connector = NULL;
+@@ -130,6 +131,7 @@ static void nv_drm_output_poll_changed(s
+     nv_drm_connector_list_iter_end(&conn_iter);
+ #endif
+ }
++#endif /* NV_DRM_OUTPUT_POLL_CHANGED_PRESENT */
+ 
+ static struct drm_framebuffer *nv_drm_framebuffer_create(
+     struct drm_device *dev,
+@@ -167,7 +172,9 @@ static const struct drm_mode_config_func
+     .atomic_check  = nv_drm_atomic_check,
+     .atomic_commit = nv_drm_atomic_commit,
+ 
++    #if defined(NV_DRM_OUTPUT_POLL_CHANGED_PRESENT)
+     .output_poll_changed = nv_drm_output_poll_changed,
++    #endif
+ };
+ 
+ static void nv_drm_event_callback(const struct NvKmsKapiEvent *event)
+@@ -240,9 +247,6 @@ nv_drm_init_mode_config(struct nv_drm_de
+     dev->mode_config.prefer_shadow = 1;
+ 
+     /* Currently unused. Update when needed. */
+-
+-    dev->mode_config.fb_base = 0;
+-
+     dev->mode_config.async_page_flip = false;
+ 
+     /* Initialize output polling support */
+@@ -775,7 +779,9 @@ static struct drm_driver nv_drm_driver =
+     .name                   = "nvidia-drm",
+ 
+     .desc                   = "NVIDIA DRM driver",
++#if defined(NV_DRM_DRIVER_HAS_DATE)
+     .date                   = "20160202",
++#endif
+ 
+ #if defined(NV_DRM_DRIVER_HAS_DEVICE_LIST)
+     .device_list            = LIST_HEAD_INIT(nv_drm_driver.device_list),
+@@ -853,9 +853,11 @@ static void nv_drm_register_drm_device(c
+ 
+     dev->dev_private = nv_dev;
+     nv_dev->dev = dev;
++#if defined(NV_DRM_DEVICE_HAS_PDEV)
+     if (device->bus == &pci_bus_type) {
+         dev->pdev = to_pci_dev(device);
+     }
++#endif
+ 
+     /* Register DRM device to DRM sub-system */
+ 
+--- a/nvidia-drm/nvidia-drm-format.c
++++ b/nvidia-drm/nvidia-drm-format.c
+@@ -28,6 +28,7 @@
+ #include <drm/drmP.h>
+ #endif
+ #include <linux/kernel.h>
++#include <linux/bitmap.h>
+ 
+ #include "nvidia-drm-format.h"
+ #include "nvidia-drm-os-interface.h"
+--- a/nvidia-drm/nvidia-drm.Kbuild
++++ b/nvidia-drm/nvidia-drm.Kbuild
+@@ -102,3 +102,9 @@ NV_CONFTEST_TYPE_COMPILE_TESTS += drm_pr
+ NV_CONFTEST_TYPE_COMPILE_TESTS += drm_driver_has_gem_prime_callbacks
+ NV_CONFTEST_TYPE_COMPILE_TESTS += drm_crtc_atomic_check_has_atomic_state_arg
+ NV_CONFTEST_TYPE_COMPILE_TESTS += drm_gem_object_vmap_has_map_arg
++NV_CONFTEST_TYPE_COMPILE_TESTS += drm_plane_atomic_check_has_atomic_state_arg
++NV_CONFTEST_TYPE_COMPILE_TESTS += drm_device_has_pdev
++NV_CONFTEST_TYPE_COMPILE_TESTS += dma_resv_add_fence
++NV_CONFTEST_TYPE_COMPILE_TESTS += drm_connector_has_override_edid
++NV_CONFTEST_TYPE_COMPILE_TESTS += drm_output_poll_changed
++NV_CONFTEST_TYPE_COMPILE_TESTS += drm_driver_has_date
+--- a/nvidia-modeset/nvidia-modeset-os-interface.h
++++ b/nvidia-modeset/nvidia-modeset-os-interface.h
+@@ -16,8 +16,19 @@
+ #if !defined(_NVIDIA_MODESET_OS_INTERFACE_H_)
+ #define _NVIDIA_MODESET_OS_INTERFACE_H_
+ 
++//#if defined(NV_KERNEL_INTERFACE_LAYER) && defined(NV_LINUX)
++#if defined(NV_LINUX)
++#include <linux/stddef.h>  /* size_t */
++  #include "conftest.h"
++  #if defined(NV_LINUX_STDARG_H_PRESENT)
++#include <linux/stdarg.h>  /* va_list */
++  #else
++#include <stdarg.h>
++  #endif   
++#else
+ #include <stddef.h>  /* size_t */
+ #include <stdarg.h>  /* va_list */
++#endif
+ 
+ #include "nvtypes.h" /* NvU8 */
+ 
+--- a/nvidia-modeset/nvkms.h
++++ b/nvidia-modeset/nvkms.h
+@@ -9,7 +9,12 @@
+ #define __NV_KMS_H__
+ 
+ #include "nvtypes.h"
++//#if defined(NV_KERNEL_INTERFACE_LAYER) && defined(NV_LINUX)
++#if defined(NV_LINUX)
++#include <linux/stddef.h>  /* size_t */
++#else
+ #include <stddef.h> /* size_t */
++#endif
+ 
+ #include "nvkms-kapi.h"
+ 

@@ -1,0 +1,33 @@
+--- a/nvidia-uvm/uvm8_migrate_pageable.c
++++ b/nvidia-uvm/uvm8_migrate_pageable.c
+@@ -888,7 +888,7 @@ static NV_STATUS migrate_pageable(struct
+ 
+     // VMAs are validated and migrated one at a time, since migrate_vma works
+     // on one vma at a time
+-    for (; vma && (vma->vm_start <= prev_outer); vma = vma->vm_next) {
++    for (; vma->vm_start <= prev_outer; vma = find_vma_intersection(mm, prev_outer, outer)) {
+         unsigned long next_addr = 0;
+         NV_STATUS status = migrate_pageable_vma(vma,
+                                                 start,
+--- a/nvidia-uvm/uvm8_policy.c
++++ b/nvidia-uvm/uvm8_policy.c
+@@ -46,7 +46,7 @@ bool uvm_is_valid_vma_range(NvU64 start,
+         if (vma->vm_end >= end)
+             return true;
+         start = vma->vm_end;
+-        vma = vma->vm_next;
++        vma = find_vma_intersection(current->mm, start, end);
+     }
+ 
+     return false;
+--- a/nvidia-uvm/uvm8_populate_pageable.c
++++ b/nvidia-uvm/uvm8_populate_pageable.c
+@@ -101,7 +101,7 @@ NV_STATUS uvm_populate_pageable(struct m
+     // VMAs are validated and populated one at a time, since they may have
+     // different protection flags
+     // Validation of VM_SPECIAL flags is delegated to get_user_pages
+-    for (; vma && (vma->vm_start <= prev_outer); vma = vma->vm_next) {
++    for (; vma && vma->vm_start <= prev_outer; vma = find_vma_intersection(mm, prev_outer, outer)) {
+         NV_STATUS status = uvm_populate_pageable_vma(vma, start, outer - start, min_prot);
+ 
+         if (status != NV_OK)

@@ -1,0 +1,62 @@
+diff --git a/kernel-dkms/nvidia-drm/nvidia-drm-drv.c b/kernel-dkms/nvidia-drm/nvidia-drm-drv.c
+index 5977953c3db4..073eb51605e4 100644
+--- a/kernel-dkms/nvidia-drm/nvidia-drm-drv.c
++++ b/kernel-dkms/nvidia-drm/nvidia-drm-drv.c
+@@ -136,6 +136,9 @@ static void nv_drm_output_poll_changed(s
+ static struct drm_framebuffer *nv_drm_framebuffer_create(
+     struct drm_device *dev,
+     struct drm_file *file,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
++    const struct drm_format_info *info,
++#endif
+     #if defined(NV_DRM_HELPER_MODE_FILL_FB_STRUCT_HAS_CONST_MODE_CMD_ARG)
+     const struct drm_mode_fb_cmd2 *cmd
+     #else
+@@ -151,6 +154,9 @@ static struct drm_framebuffer *nv_drm_fr
+     fb = nv_drm_internal_framebuffer_create(
+             dev,
+             file,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
++            info,
++#endif
+             &local_cmd);
+ 
+     #if !defined(NV_DRM_HELPER_MODE_FILL_FB_STRUCT_HAS_CONST_MODE_CMD_ARG)
+diff --git a/kernel-dkms/nvidia-drm/nvidia-drm-fb.c b/kernel-dkms/nvidia-drm/nvidia-drm-fb.c
+index 5977953c3db4..073eb51605e4 100644
+--- a/kernel-dkms/nvidia-drm/nvidia-drm-fb.c
++++ b/kernel-dkms/nvidia-drm/nvidia-drm-fb.c
+@@ -173,6 +173,9 @@ static int nv_drm_framebuffer_init(struc
+ struct drm_framebuffer *nv_drm_internal_framebuffer_create(
+     struct drm_device *dev,
+     struct drm_file *file,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
++    const struct drm_format_info *info,
++#endif
+     struct drm_mode_fb_cmd2 *cmd)
+ {
+     struct nv_drm_device *nv_dev = to_nv_device(dev);
+@@ -201,6 +204,9 @@ struct drm_framebuffer *nv_drm_internal_
+         dev,
+         #endif
+         &nv_fb->base,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
++        info,
++#endif
+         cmd);
+ 
+     /*
+diff --git a/kernel-dkms/nvidia-drm/nvidia-drm-fb.h b/kernel-dkms/nvidia-drm/nvidia-drm-fb.h
+index 5977953c3db4..073eb51605e4 100644
+--- a/kernel-dkms/nvidia-drm/nvidia-drm-fb.h
++++ b/kernel-dkms/nvidia-drm/nvidia-drm-fb.h
+@@ -59,6 +59,9 @@ static inline struct nv_drm_framebuffer
+ struct drm_framebuffer *nv_drm_internal_framebuffer_create(
+     struct drm_device *dev,
+     struct drm_file *file,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
++    const struct drm_format_info *info,
++#endif
+     struct drm_mode_fb_cmd2 *cmd);
+ 
+ #endif /* NV_DRM_ATOMIC_MODESET_AVAILABLE */

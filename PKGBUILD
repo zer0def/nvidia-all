@@ -427,28 +427,38 @@ source=($_source_name
         'kernel-5.16.patch' # 5.16 workaround
         'kernel-5.16-std.diff' # 5.16 workaround for 470.6x
         'kernel-5.17.patch' # 5.17 workaround
+        'kernel-5.17-450.patch' # 5.17 workaround
+        'kernel-5.18.diff'
         'kernel-6.0.patch'
         'kernel-6.0-470.patch' # acpi backports from 515.x for 470.x
+        'kernel-6.0-450.patch' # acpi backports from 515.x for 450.x
         'kernel-6.2.patch'
         'kernel-6.3.patch'
+        'kernel-6.3-450.patch'
         'legacy-kernel-6.4.diff'
         'kernel-6.4.patch'
+        'kernel-6.4-450.patch'
         'legacy-kernel-6.5.diff'
         'kernel-6.5.patch'
         'legacy-kernel-6.6.diff'
         '6.1-6-7-8-gpl.diff'
         'kernel-6.8.patch'
+        'kernel-6.8-450.patch'
         'make-modeset-fbdev-default.diff'
         'make-modeset-fbdev-default-565.diff'
         '6.11-fbdev.diff'
         'nvidia-sleep.conf'
         'kernel-6.12.patch'
+        'kernel-6.13.patch'
         'silence-event-assert-until-570.diff'
         'fix-hdmi-names.diff'
         'Enable-atomic-kernel-modesetting-by-default.diff'
         'Add-IBT-support.diff'
         'gcc-15.diff'
+        'gcc-15-legacy.diff'
+        'kernel-6.15.patch'
         'kernel-6.17.patch'
+        'kernel-6.17-450.patch'
         'limit-vram-usage'
         'cuda-no-stable-perf-limit'
         '50-nvidia-cuda-disable-perf-boost.conf'
@@ -467,6 +477,11 @@ source=($_source_name
         'nvidia-bsb-dsc-fix.diff'
         'nvidia-settings-libxnvctrl_so.diff'
         'fix-hw-cursor-kde.diff'
+        'follow-pfn.diff'
+        'task-interruptible.diff'
+        'uvm-gpu.diff'
+        'vm-next.diff'
+        'nvidia-drm.diff'
 )
 
 msg2 "Selected driver integrity check behavior (md5sum or SKIP): $_md5sum" # If the driver is "known", return md5sum. If it isn't, return SKIP
@@ -513,28 +528,38 @@ md5sums=("$_md5sum"
         'd684ca11fdc9894c14ead69cb35a5946'
         '0f987607c98eb6faeb7d691213de6a70'
         'a70bc9cbbc7e8563b48985864a11de71'
+        '0e6803feef489e14f7ce7702ce5cfd4f'
+        '3c7cc0ed58189e07d60f58fd8883e194'
         '31128900574dec9ebdb753db50ef4f16'
         '0b9b855d9be313153a5903e46e774a30'
+        'ba4043f7a6fd98bd370eae257ffe2291'
         '5d573b1aa0712b9bd2000c9fefdf84c2'
         'a6acbba08173769399658914eb86a212'
+        '1100f4f239e1b98e12eff5da8c36bf90'
         'f0173a8bce0124b2d62a54f2e22d1552'
         '4f855bb0e0b84e8e5d072c687256767a'
+        'e20fc9fe819b573ff55765f6b4aed51f'
         '50d3eac54d14d44d70df92770a3a9abf'
         'b81cac7573842ebd7af30fdf851c63f9'
         'd11cb3bd76ab61a0f086aea9a0c53087'
         'f7f95287eb18be63bfad0427f13b6d43'
         '7481cb7f52b76c426d579b115e4c84b6'
+        '98ec093e455114cd68c0c254605960e0'
         'c06a9359969ba331bc9fac91fe0eeff2'
         'c691df97015eee42d51b34b147dd5236'
         'adfcf56ea4a4a420d9ef07b9d4b451dc'
         '2b5b62c1265b3b6b18022a0a716e5fcd'
         '676d7039ff5b5e2bdd03db08fd1cba4e'
+        'dd8901186ac34395a9d098ddf8a30603'
         '0e54e7d932e520c403181e3348d4d42b'
         '6904323d3a4ad04a708c927e930efc34'
         '42a482aa44953061cbbf9a495fcad926'
         '7143f20dbb3333ea6304540b5318bacb'
         '6c26d0df1e30c8bedf6abfe99e842944'
+        '7f0c8c560eed48cd6eca747c81997231'
+        '942172e75aa6db2417b78e412d193c2a'
         'c39df46bb99047ca7d09f9122a7370a8'
+        '5cb60af0f44cd3ba3fd08b687295a58c'
         '411b490057cdd9e046ca6ea3d39b81bd' # limit-vram-usage
         'f7ec305af36bed8054668a7f3b5b82c3' # cuda-no-stable-perf-limit
         'f6d0a9b1e503d0e8c026a20b61f889c2'
@@ -553,6 +578,11 @@ md5sums=("$_md5sum"
         'c488acde6cf5bfed42ee969f28b379dc' # nvidia-bsb-dsc-fix.patch
         '12ce769d5212fd1bd87d54bf52ad39c7' # nvidia-settings-libxnvctrl_so.diff
         'dcf3b66d1064c6c7f4598684a1d2368d' # fix-hw-cursor-kde.diff
+        '481579f7fb8e0490e8abe5291d1af514'
+        '5e8d6fae85134d99e885d60551867168'
+        'e16a64aba34a7b7913263e443804fab9'
+        '2cdaf46a1a02a6299983daeeefc36301'
+        '01c68eb85f6ed8bebf7a3aa7aec2632a'
 )
 
 if [ "$_open_source_modules" = "true" ]; then
@@ -882,7 +912,7 @@ prepare() {
     fi
     # Add future kernel patch applications here following the same pattern
 
-    if [ "$_gcc15" = "true" ]; then
+    if [ "$_gcc15_fix" = "true" ]; then
       ( cd kernel-open && patch -Np2 -i "$srcdir"/gcc-15.diff )
       ( cd "$srcdir"/"$_pkg"/kernel-open && patch -Np2 -i "$srcdir"/gcc-15.diff )
     fi
@@ -1193,6 +1223,11 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         _whitelist514=( 465* 470.4* 470.5* )
       fi
 
+      # 5.15
+      if (( $(vercmp "$_kernel" "5.15") >= 0 )); then
+        grep -rE '^#include\s*<stdarg.h>$' "${srcdir}/${_pkg}/kernel-${_kernel}/"* | awk -F: '{print $1}' | sort -u | xargs -r -- sed -i -e '/^#include\s*<stdarg.h>$/i #include <linux/version.h>\n#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)' -e '/^#include\s*<stdarg.h>$/a #else\n#include <linux/stdarg.h>\n#endif'
+      fi
+
       # 5.16
       if (( $(vercmp "$_kernel" "5.16") >= 0 )); then
         _kernel516="1"
@@ -1209,6 +1244,13 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
       if (( $(vercmp "$_kernel" "5.17") >= 0 )); then
         _kernel517="1"
         _whitelist517=( 470.62.* 495*)
+      fi
+
+      # 5.18
+      if (( $(vercmp "$_kernel" "5.18") >= 0 )); then
+        if [ "${pkgver%%.*}" -le 470 ]; then
+          patch -Np2 -i "${srcdir}/kernel-5.18.diff" -d "${srcdir}/${_pkg}/kernel-${_kernel}"
+        fi
       fi
 
       # 6.0
@@ -1239,13 +1281,14 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
           patch -Np2 -i "$srcdir"/legacy-kernel-6.4.diff
           cd ..
         fi
+        [ "${pkgver%%.*}" -ne 450 ] || patch -Np2 -d "${srcdir}/${_pkg}/kernel-${_kernel}" -i "${srcdir}/kernel-6.4-450.patch"
       fi
 
       # 6.5
       if (( $(vercmp "$_kernel" "6.5") >= 0 )); then
         _kernel65="1"
         _whitelist65=(525.5* 525.6* 525.7* 525.8* 525.10* 525.11* 525.12* 530* 535.5* 535.43.02)
-        if [[ $pkgver = 470.199* ]]; then
+        if [ "${pkgver%%.*}" -le 470 ]; then
           cd "$srcdir"/"$_pkg"/kernel-$_kernel
           msg2 "Applying legacy-kernel-6.5.patch for $_kernel..."
           patch -Np2 -i "$srcdir"/legacy-kernel-6.5.diff
@@ -1311,6 +1354,19 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         _whitelist612=( 565.57* )
       fi
 
+      # 6.15
+      if (( $(vercmp "$_kernel" "6.15") >= 0 )); then
+        sed -i 's/EXTRA_CFLAGS/ccflags-y/g' "${srcdir}/${_pkg}/kernel-${_kernel}/Kbuild"
+        if [ "${pkgver%%.*}" -le 470 ]; then
+          patch -Np1 -i "${srcdir}/kernel-6.15.patch" -d "${srcdir}/${_pkg}/kernel-${_kernel}"
+        fi
+      fi
+
+      # 6.17
+      if (( $(vercmp "$_kernel" "6.17") >= 0 )); then
+        [ "${pkgver%%.*}" -ne 450 ] || patch -Np2 -d "${srcdir}/${_pkg}/kernel-${_kernel}" -i "${srcdir}/kernel-6.17-450.patch"
+      fi
+
       # 6.19
       if (( $(vercmp "$_kernel" "6.19") >= 0 )); then
         _whitelist619=( 590* )
@@ -1344,7 +1400,7 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
       if [ "$_gcc14" = "true" ]; then
         cd "$srcdir"/"$_pkg"/kernel-$_kernel
         msg2 "Applying gcc-14 patch..."
-        if [[ $pkgver = 470* ]]; then
+        if [ "${pkgver%%.*}" -le 470 ]; then
           patch -Np2 -i "$srcdir"/gcc-14-470.diff
         else
           patch -Np2 -i "$srcdir"/gcc-14.diff
@@ -1352,12 +1408,20 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         cd ..
       fi
 
-      if [ "$_gcc15" = "true" ]; then
+      if [ "$_gcc15_fix" = "true" ]; then
         cd "$srcdir"/"$_pkg"/kernel-$_kernel
         msg2 "Applying gcc-15 patch..."
-        patch -Np2 -i "$srcdir"/gcc-15.diff
+        ([ "${pkgver%%.*}" -le 470 ] && cat "${srcdir}/gcc-15-legacy.diff" || cat "${srcdir}/gcc-15.diff") | patch -Np2
         cd ..
       fi
+      [ "${pkgver%%.*}" -ge 495 ] || patch -Np1 -i "${srcdir}/task-interruptible.diff" -d "${srcdir}/${_pkg}/kernel-${_kernel}"
+      [ "${pkgver%%.*}" -ge 510 ] || {
+        cat "${srcdir}/uvm-gpu.diff" | patch -Np1 -d "${srcdir}/${_pkg}/kernel-${_kernel}"
+      }
+      [ "${pkgver%%.*}" -ge 520 ] || {
+        cat "${srcdir}/vm-next.diff" "${srcdir}/nvidia-drm.diff" | patch -Np1 -d "${srcdir}/${_pkg}/kernel-${_kernel}"
+      }
+      [ "${pkgver%%.*}" -ge 560 ] || patch -Np1 -i "${srcdir}/follow-pfn.diff" -d "${srcdir}/${_pkg}/kernel-${_kernel}"
 
       # Loop patches (kernel-X.Y.patch only, avoid processing feature patches)
       for _p in $(printf -- '%s\n' ${source[@]} | grep -E 'kernel-[0-9]+\.[0-9]+\.patch$'); do  # https://stackoverflow.com/a/21058239/1821548
@@ -1759,6 +1823,11 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         fi
       fi
 
+      # 5.15
+      if (( $(vercmp "$_kernel" "5.15") >= 0 )); then
+        grep -rE '^#include\s*<stdarg.h>$' "${srcdir}/${_pkg}/kernel-dkms/"* | awk -F: '{print $1}' | sort -u | xargs -r -- sed -i -e '/^#include\s*<stdarg.h>$/i #include <linux/version.h>\n#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)' -e '/^#include\s*<stdarg.h>$/a #else\n#include <linux/stdarg.h>\n#endif'
+      fi
+
       # 5.16
       if [ "$_kernel516" = "1" ]; then
         patchy=0
@@ -1791,6 +1860,14 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         else
           msg2 "Skipping kernel-5.17.patch as it doesn't apply to this driver version..."
         fi
+        [ "${pkgver%%.*}" -ne 450 ] || patch -Np2 -d "${srcdir}/${_pkg}/kernel-dkms" -i "${srcdir}/kernel-5.17-450.patch"
+      fi
+
+      # 5.18
+      if (( $(vercmp "$_kernel" "5.18") >= 0 )); then
+        if [ "${pkgver%%.*}" -le 470 ]; then
+          patch -Np2 -i "${srcdir}/kernel-5.18.diff" -d "${srcdir}/${_pkg}/kernel-dkms"
+        fi
       fi
 
       # 6.0
@@ -1809,6 +1886,10 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         else
           msg2 "Skipping kernel-6.0.patch as it doesn't apply to this driver version..."
         fi
+        [ "${pkgver%%.*}" -ne 450 ] || {
+          patch -Np2 -d "${srcdir}/${_pkg}/kernel-dkms" -i "${srcdir}/kernel-6.0-450.patch"
+          patch -Np2 -d "${srcdir}/${_pkg}/kernel-dkms" -i "${srcdir}/kernel-6.0.patch"
+        }
       fi
 
       # 6.2
@@ -1837,6 +1918,7 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         else
           msg2 "Skipping kernel-6.3.patch as it doesn't apply to this driver version..."
         fi
+        [ "${pkgver%%.*}" -ne 450 ] || patch -Np2 -d "${srcdir}/${_pkg}/kernel-dkms" -i "${srcdir}/kernel-6.3-450.patch"
       fi
 
       # 6.4
@@ -1855,6 +1937,7 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
           msg2 "Applying legacy-kernel-6.4.patch for dkms..."
           patch -Np1 -i "$srcdir"/legacy-kernel-6.4.diff
         fi
+        [ "${pkgver%%.*}" -ne 450 ] || patch -Np2 -d "${srcdir}/${_pkg}/kernel-dkms" -i "${srcdir}/kernel-6.4-450.patch"
       fi
 
       # 6.5
@@ -1869,7 +1952,7 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         else
           msg2 "Skipping kernel-6.5.patch as it doesn't apply to this driver version..."
         fi
-        if [[ $pkgver = 470.199.* ]]; then
+        if [ "${pkgver%%.*}" -le 470 ]; then
           msg2 "Applying legacy-kernel-6.5.patch for dkms..."
           patch -Np1 -i "$srcdir"/legacy-kernel-6.5.diff
         fi
@@ -1911,6 +1994,7 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         else
           msg2 "Skipping kernel-6.8.patch as it doesn't apply to this driver version..."
         fi
+        [ "${pkgver%%.*}" -ne 450 ] || patch -Np2 -d "${srcdir}/${_pkg}/kernel-dkms" -i "${srcdir}/kernel-6.8-450.patch"
       fi
 
       # 6.11
@@ -1950,6 +2034,24 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         fi
       fi
 
+      # 6.13
+      if (( $(vercmp "$_kernel" "6.13") >= 0 )); then
+        patch -Np1 -i "${srcdir}/kernel-6.13.patch" -d "${srcdir}/${_pkg}/kernel-dkms"
+      fi
+
+      # 6.15
+      if (( $(vercmp "$_kernel" "6.15") >= 0 )); then
+        sed -i 's/EXTRA_CFLAGS/ccflags-y/g' "${srcdir}/${_pkg}/kernel-dkms/Kbuild"
+        if [ "${pkgver%%.*}" -le 470 ]; then
+          patch -Np1 -i "${srcdir}/kernel-6.15.patch" -d "${srcdir}/${_pkg}/kernel-dkms"
+        fi
+      fi
+
+      # 6.17
+      if (( $(vercmp "$_kernel" "6.17") >= 0 )); then
+        [ "${pkgver%%.*}" -ne 450 ] || patch -Np2 -d "${srcdir}/${_pkg}/kernel-dkms" -i "${srcdir}/kernel-6.17-450.patch"
+      fi
+
       # 6.19
       if (( $(vercmp "$_kernel" "6.19") >= 0 )); then
         if [[ $pkgver = 470* ]]; then
@@ -1968,18 +2070,18 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         fi
       fi
 
-      if [ "$_gcc14" = "true" ]; then
+      if [ "$_gcc14_fix" = "true" ]; then
         msg2 "Applying gcc-14 patch..."
-        if [[ $pkgver = 470* ]]; then
+        if [ "${pkgver%%.*}" -le 470 ]; then
           patch -Np1 -i "$srcdir"/gcc-14-470.diff
         else
           patch -Np1 -i "$srcdir"/gcc-14.diff
         fi
       fi
 
-      if [ "$_gcc15" = "true" ]; then
+      if [ "$_gcc15_fix" = "true" ]; then
         msg2 "Applying gcc-15 patch..."
-        patch -Np1 -i "$srcdir"/gcc-15.diff
+        ([ "${pkgver%%.*}" -le 470 ] && cat "${srcdir}/gcc-15-legacy.diff" || cat "${srcdir}/gcc-15.diff") | patch -Np1
       fi
 
       # Legacy quirks
@@ -1995,6 +2097,14 @@ DEST_MODULE_LOCATION[3]="/kernel/drivers/video"' dkms.conf
         msg2 "Applying kernel-5.4-prime.diff for dkms..."
         patch -Np1 -i "$srcdir"/kernel-5.4-prime.diff
       fi
+      [ "${pkgver%%.*}" -ge 495 ] || patch -Np1 -i "${srcdir}/task-interruptible.diff" -d "${srcdir}/${_pkg}/kernel-dkms"
+      [ "${pkgver%%.*}" -ge 510 ] || {
+        cat "${srcdir}/uvm-gpu.diff" | patch -Np1 -d "${srcdir}/${_pkg}/kernel-dkms"
+      }
+      [ "${pkgver%%.*}" -ge 520 ] || {
+        cat "${srcdir}/vm-next.diff" "${srcdir}/nvidia-drm.diff" | patch -Np1 -d "${srcdir}/${_pkg}/kernel-dkms"
+      }
+      [ "${pkgver%%.*}" -ge 560 ] || patch -Np1 -i "${srcdir}/follow-pfn.diff" -d "${srcdir}/${_pkg}/kernel-dkms"
     fi
   fi
 }
@@ -3057,4 +3167,4 @@ function exit_cleanup {
   msg2 'exit cleanup done'
 }
 
-trap exit_cleanup EXIT
+#trap exit_cleanup EXIT

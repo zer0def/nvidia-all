@@ -1,0 +1,388 @@
+diff -rupN NVIDIA-Linux-x86_64-510.60.02/kernel/common/inc/nv-linux.h NVIDIA-Linux-x86_64-510.68.02/kernel/common/inc/nv-linux.h
+--- NVIDIA-Linux-x86_64-510.60.02/kernel/common/inc/nv-linux.h	2022-03-16 13:01:09.000000000 +0100
++++ NVIDIA-Linux-x86_64-510.68.02/kernel/common/inc/nv-linux.h	2022-04-20 23:49:46.000000000 +0200
+@@ -983,9 +983,16 @@ static inline pgprot_t nv_adjust_pgprot(
+     /*
+      * When AMD memory encryption is enabled, device memory mappings with the
+      * C-bit set read as 0xFF, so ensure the bit is cleared for user mappings.
++     *
++     * If cc_mkdec() is present, then pgprot_decrypted() can't be used.
+      */
++#if defined(NV_CC_MKDEC_PRESENT)
++    prot =  __pgprot(__sme_clr(pgprot_val(vm_prot)));
++#else
+     prot = pgprot_decrypted(prot);
+ #endif
++#endif
++
+     return prot;
+ }
+ 
+diff -rupN NVIDIA-Linux-x86_64-510.60.02/kernel/conftest.sh NVIDIA-Linux-x86_64-510.68.02/kernel/conftest.sh
+--- NVIDIA-Linux-x86_64-510.60.02/kernel/conftest.sh	2022-03-16 12:11:55.000000000 +0100
++++ NVIDIA-Linux-x86_64-510.68.02/kernel/conftest.sh	2022-04-20 22:58:19.000000000 +0200
+@@ -121,5 +121,6 @@ test_headers() {
+     FILES="$FILES drm/drm_file.h"
+     FILES="$FILES drm/drm_ioctl.h"
+     FILES="$FILES drm/drm_device.h"
++    FILES="$FILES drm/drm_mode_config.h"
+     FILES="$FILES generated/autoconf.h"
+     FILES="$FILES generated/compile.h"
+@@ -1234,6 +1237,23 @@ compile_test() {
+             compile_check_conftest "$CODE" "NV_MDEV_SET_IOMMU_DEVICE_PRESENT" "" "functions"
+         ;;
+ 
++        mdev_parent_ops_has_open_device)
++            # Determine if 'mdev_parent_ops' structure has a 'open_device'
++            # field.
++            #
++            # Added by commit 2fd585f4ed9d ("vfio: Provide better generic support
++            # for open/release vfio_device_ops") in 5.15 (2021-08-05)
++            #
++            CODE="
++            #include <linux/pci.h>
++            #include <linux/mdev.h>
++            int conftest_mdev_parent_ops_has_open_device(void) {
++                return offsetof(struct mdev_parent_ops, open_device);
++            }"
++
++            compile_check_conftest "$CODE" "NV_MDEV_PARENT_OPS_HAS_OPEN_DEVICE" "" "types"
++        ;;
++
+         pci_irq_vector_helpers)
+             #
+             # Determine if pci_alloc_irq_vectors(), pci_free_irq_vectors()
+@@ -4412,6 +4432,25 @@ compile_test() {
+ 
+         ;;
+ 
++        cc_mkdec)
++            #
++            # Determine if cc_mkdec() is present.
++            #
++            # cc_mkdec() by commit b577f542f93c ("x86/coco: Add API to handle
++            # encryption mask) in v5.18-rc1 (2022-02-22).
++            #
++            CODE="
++            #if defined(NV_ASM_COCO_H_PRESENT)
++            #include <asm/coco.h>
++            #endif
++
++            void conftest_cc_mkdec(void) {
++                cc_mkdec();
++            }"
++
++            compile_check_conftest "$CODE" "NV_CC_MKDEC_PRESENT" "" "functions"
++        ;;
++
+         drm_prime_pages_to_sg_has_drm_device_arg)
+             #
+             # Determine if drm_prime_pages_to_sg() has 'dev' argument.
+@@ -5175,6 +5218,64 @@ compile_test() {
+             compile_check_conftest "$CODE" "NV_DRM_CRTC_STATE_HAS_NO_VBLANK" "" "types"
+         ;;
+ 
++        drm_mode_config_has_allow_fb_modifiers)
++            #
++            # Determine if the 'drm_mode_config' structure has
++            # an 'allow_fb_modifiers' field.
++            #
++            # an 'allow_fb_modifiers' field in the 'drm_mode_config' structure,
++            # is added by commit e3eb3250d84e ("drm: add support for
++            # tiled/compressed/etc modifier in addfb2") in v4.1, and removed by
++            # commit 3d082157a242 ("drm: remove allow_fb_modifiers") in v5.18-rc1.
++            #
++            # The 'struct drm_mode_config' definition, is moved to
++            # drm_mode_config.h file by commit 28575f165d36 ("drm: Extract
++            # drm_mode_config.[hc]") in v4.10.
++            #
++            CODE="$CONFTEST_PREAMBLE
++            #if defined(NV_DRM_DRM_MODE_CONFIG_H_PRESENT)
++            #include <drm/drm_mode_config.h>
++            #else
++            #include <drm/drm_crtc.h>
++            #endif
++            int conftest_drm_mode_config_has_allow_fb_modifiers(void) {
++                return offsetof(struct drm_mode_config, allow_fb_modifiers);
++            }"
++
++            compile_check_conftest "$CODE" "NV_DRM_MODE_CONFIG_HAS_ALLOW_FB_MODIFIERS" "" "types"
++        ;;
++
++        dma_set_coherent_mask)
++            #
++            # Determine if dma_set_coherent_mask is present
++            #
++            # Added by commit ed6ccf10f24bd (dma-mapping: properly stub out
++            # the DMA API for !CONFIG_HAS_DMA) in 2.6.34
++            #
++            CODE="
++            #include <linux/dma-mapping.h>
++            void conftest_dma_set_coherent_mask(void) {
++                dma_set_coherent_mask();
++            }"
++            compile_check_conftest "$CODE" "NV_DMA_SET_COHERENT_MASK_PRESENT" "" "functions"
++        ;;
++
++        acpi_bus_get_device)
++            #
++            # Determine if the acpi_bus_get_device() function is present
++            #
++            # acpi_bus_get_device() was removed by commit ac2a3feefad5
++            # ("ACPI: bus: Eliminate acpi_bus_get_device()") in
++            # v5.18-rc2 (2022-04-05).
++            #
++            CODE="
++            #include <linux/acpi.h>
++            int conftest_acpi_bus_get_device(void) {
++                return acpi_bus_get_device();
++            }"
++            compile_check_conftest "$CODE" "NV_ACPI_BUS_GET_DEVICE_PRESENT" "" "functions"
++        ;;
++
+         # When adding a new conftest entry, please use the correct format for
+         # specifying the relevant upstream Linux kernel commit.
+         #
+diff -rupN NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/linux_nvswitch.c NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/linux_nvswitch.c
+--- NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/linux_nvswitch.c	2022-03-16 13:00:50.000000000 +0100
++++ NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/linux_nvswitch.c	2022-04-20 23:49:26.000000000 +0200
+@@ -2140,11 +2140,11 @@ _nvswitch_to_pci_dma_direction
+ )
+ {
+     if (direction == NVSWITCH_DMA_DIR_TO_SYSMEM)
+-        return PCI_DMA_FROMDEVICE;
++        return DMA_FROM_DEVICE;
+     else if (direction == NVSWITCH_DMA_DIR_FROM_SYSMEM)
+-        return PCI_DMA_TODEVICE;
++        return DMA_TO_DEVICE;
+     else
+-        return PCI_DMA_BIDIRECTIONAL;
++        return DMA_BIDIRECTIONAL;
+ }
+ 
+ NvlStatus
+@@ -2165,9 +2165,9 @@ nvswitch_os_map_dma_region
+ 
+     dma_dir = _nvswitch_to_pci_dma_direction(direction);
+ 
+-    *dma_handle = (NvU64)pci_map_single(pdev, cpu_addr, size, dma_dir);
++    *dma_handle = (NvU64)dma_map_single(&pdev->dev, cpu_addr, size, dma_dir);
+ 
+-    if (pci_dma_mapping_error(pdev, *dma_handle))
++    if (dma_mapping_error(&pdev->dev, *dma_handle))
+     {
+         pr_err("nvidia-nvswitch: unable to create PCI DMA mapping\n");
+         return -NVL_ERR_GENERIC;
+@@ -2194,7 +2194,7 @@ nvswitch_os_unmap_dma_region
+ 
+     dma_dir = _nvswitch_to_pci_dma_direction(direction);
+ 
+-    pci_unmap_single(pdev, dma_handle, size, dma_dir);
++    dma_unmap_single(&pdev->dev, dma_handle, size, dma_dir);
+ 
+     return NVL_SUCCESS;
+ }
+@@ -2211,7 +2211,7 @@ nvswitch_os_set_dma_mask
+     if (!pdev)
+         return -NVL_BAD_ARGS;
+ 
+-    if (pci_set_dma_mask(pdev, DMA_BIT_MASK(dma_addr_width)))
++    if (dma_set_mask(&pdev->dev, DMA_BIT_MASK(dma_addr_width)))
+         return -NVL_ERR_GENERIC;
+ 
+     return NVL_SUCCESS;
+@@ -2234,7 +2234,7 @@ nvswitch_os_sync_dma_region_for_cpu
+ 
+     dma_dir = _nvswitch_to_pci_dma_direction(direction);
+ 
+-    pci_dma_sync_single_for_cpu(pdev, dma_handle, size, dma_dir);
++    dma_sync_single_for_cpu(&pdev->dev, dma_handle, size, dma_dir);
+ 
+     return NVL_SUCCESS;
+ }
+@@ -2256,7 +2256,7 @@ nvswitch_os_sync_dma_region_for_device
+ 
+     dma_dir = _nvswitch_to_pci_dma_direction(direction);
+ 
+-    pci_dma_sync_single_for_device(pdev, dma_handle, size, dma_dir);
++    dma_sync_single_for_device(&pdev->dev, dma_handle, size, dma_dir);
+ 
+     return NVL_SUCCESS;
+ }
+diff -rupN NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/nv-acpi.c NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/nv-acpi.c
+--- NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/nv-acpi.c	2022-03-16 13:01:07.000000000 +0100
++++ NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/nv-acpi.c	2022-04-20 23:49:44.000000000 +0200
+@@ -631,8 +631,10 @@ static void nv_uninstall_notifier(nv_acp
+ 
+ void NV_API_CALL nv_acpi_methods_init(NvU32 *handlesPresent)
+ {
++#if defined(NV_ACPI_BUS_GET_DEVICE_PRESENT)
+     struct acpi_device *device = NULL;
+     int retVal = -1;
++#endif
+ 
+ 
+     if (!handlesPresent) // Caller passed us invalid pointer.
+@@ -644,6 +646,7 @@ void NV_API_CALL nv_acpi_methods_init(Nv
+     NV_ACPI_WALK_NAMESPACE(ACPI_TYPE_DEVICE, ACPI_ROOT_OBJECT,
+                         ACPI_UINT32_MAX, nv_acpi_find_methods, NULL, NULL);
+ 
++#if defined(NV_ACPI_BUS_GET_DEVICE_PRESENT)
+     if (nvif_handle)
+     {
+         *handlesPresent = NV_ACPI_NVIF_HANDLE_PRESENT;
+@@ -659,6 +662,7 @@ void NV_API_CALL nv_acpi_methods_init(Nv
+ 
+         } while (0);
+     }
++#endif
+ 
+     if (wmmx_handle)
+         *handlesPresent = *handlesPresent | NV_ACPI_WMMX_HANDLE_PRESENT;
+@@ -666,4 +670,6 @@ void NV_API_CALL nv_acpi_methods_init(Nv
+         *handlesPresent = *handlesPresent | NV_ACPI_MXMS_HANDLE_PRESENT;
++
++#if defined(NV_ACPI_BUS_GET_DEVICE_PRESENT)
+     if (psr_handle)
+     {
+         // Since _PSR is not a per-GPU construct we only need to register a
+@@ -690,6 +696,7 @@ void NV_API_CALL nv_acpi_methods_init(Nv
+             }
+         }
+     }
++#endif
+ 
+     return;
+ }
+@@ -742,9 +749,11 @@ void NV_API_CALL nv_acpi_methods_uninit(
+     if (nvif_parent_gpu_handle == NULL)
+         return;
+ 
++#if defined(NV_ACPI_BUS_GET_DEVICE_PRESENT)
+     acpi_bus_get_device(nvif_parent_gpu_handle, &device);
+ 
+     nv_uninstall_notifier(device->driver_data, nv_acpi_event);
++#endif
+ 
+     device->driver_data = NULL;
+     nvif_parent_gpu_handle = NULL;
+@@ -1162,7 +1171,11 @@ NV_STATUS NV_API_CALL nv_acpi_ddc_method
+     if (!dev_handle)
+         return NV_ERR_INVALID_ARGUMENT;
+ 
++#if defined(NV_ACPI_BUS_GET_DEVICE_PRESENT)
+     status = acpi_bus_get_device(dev_handle, &device);
++#else
++    return NV_ERR_NOT_SUPPORTED;
++#endif
+ 
+     if (ACPI_FAILURE(status) || !device)
+         return NV_ERR_INVALID_ARGUMENT;
+@@ -1584,7 +1597,12 @@ NV_STATUS NV_API_CALL nv_acpi_mux_method
+     if (!dev_handle)
+         return NV_ERR_INVALID_ARGUMENT;
+ 
++#if defined(NV_ACPI_BUS_GET_DEVICE_PRESENT)
+     status = acpi_bus_get_device(dev_handle, &device);
++#else
++    return NV_ERR_NOT_SUPPORTED;
++#endif
++
+ 
+     if (ACPI_FAILURE(status) || !device)
+         return NV_ERR_INVALID_ARGUMENT;
+diff -rupN NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/nv.c NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/nv.c
+--- NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/nv.c	2022-03-16 13:01:07.000000000 +0100
++++ NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/nv.c	2022-04-20 23:49:43.000000000 +0200
+@@ -2765,14 +2765,18 @@ nv_set_dma_address_size(
+     if (!nvl->tce_bypass_enabled)
+     {
+         NvU64 new_mask = (((NvU64)1) << phys_addr_bits) - 1;
+-        pci_set_dma_mask(nvl->pci_dev, new_mask);
++        dma_set_mask(&nvl->pci_dev->dev, new_mask);
+         /* Certain kernels have a bug which causes pci_set_consistent_dma_mask
+          * to call GPL sme_active symbol, this bug has already been fixed in a
+          * minor release update but detect the failure scenario here to prevent
+          * an installation regression */
+ #if !NV_IS_EXPORT_SYMBOL_GPL_sme_active
++#if defined(NV_DMA_SET_COHERENT_MASK_PRESENT)
++        dma_set_coherent_mask(&nvl->pci_dev->dev, new_mask);
++#else
+         pci_set_consistent_dma_mask(nvl->pci_dev, new_mask);
+ #endif
++#endif
+     }
+ }
+ 
+@@ -4586,7 +4590,11 @@ NvU64 NV_API_CALL nv_get_dma_start_addre
+     nvl->dma_dev.addressable_range.start = dma_addr & ~(saved_dma_mask);
+ 
+     /* Update the coherent mask to match */
++#if defined(NV_DMA_SET_COHERENT_MASK_PRESENT)
+     dma_set_coherent_mask(&pci_dev->dev, pci_dev->dma_mask);
++#else
++    pci_set_consistent_dma_mask(pci_dev, pci_dev->dma_mask);
++#endif
+ 
+ done:
+     return nvl->dma_dev.addressable_range.start;
+diff -rupN NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/nvidia.Kbuild NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/nvidia.Kbuild
+--- NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/nvidia.Kbuild	2022-03-16 13:00:48.000000000 +0100
++++ NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/nvidia.Kbuild	2022-04-20 23:49:23.000000000 +0200
+@@ -160,5 +160,8 @@ NV_CONFTEST_FUNCTION_COMPILE_TESTS += hl
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += pci_enable_atomic_ops_to_root
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += vga_tryget
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += pgprot_decrypted
++NV_CONFTEST_FUNCTION_COMPILE_TESTS += cc_mkdec
++NV_CONFTEST_FUNCTION_COMPILE_TESTS += dma_set_coherent_mask
++NV_CONFTEST_FUNCTION_COMPILE_TESTS += acpi_bus_get_device
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += iterate_fd
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += seq_read_iter
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += sg_page_iter_page
+diff -rupN NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/nv-pci.c NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/nv-pci.c
+--- NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia/nv-pci.c	2022-03-16 13:01:07.000000000 +0100
++++ NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia/nv-pci.c	2022-04-20 23:49:43.000000000 +0200
+@@ -596,7 +596,9 @@ next_bar:
+ 
+     rm_set_rm_firmware_requested(sp, nv);
+ 
+-#if defined(DPM_FLAG_NEVER_SKIP)
++#if defined(DPM_FLAG_NO_DIRECT_COMPLETE)
++    dev_pm_set_driver_flags(nvl->dev, DPM_FLAG_NO_DIRECT_COMPLETE);
++#elif defined(DPM_FLAG_NEVER_SKIP)
+     dev_pm_set_driver_flags(nvl->dev, DPM_FLAG_NEVER_SKIP);
+ #endif
+ 
+diff -rupN NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia-drm/nvidia-drm-gem.c NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia-drm/nvidia-drm-gem.c
+--- NVIDIA-Linux-x86_64-510.60.02/kernel/nvidia-drm/nvidia-drm-gem.c	2022-03-16 12:15:44.000000000 +0100
++++ NVIDIA-Linux-x86_64-510.68.02/kernel/nvidia-drm/nvidia-drm-gem.c	2022-04-20 23:03:43.000000000 +0200
+@@ -67,8 +67,19 @@ void nv_drm_gem_free(struct drm_gem_obje
+ 
+ #if !defined(NV_DRM_DRIVER_HAS_GEM_PRIME_CALLBACKS) && \
+     defined(NV_DRM_GEM_OBJECT_VMAP_HAS_MAP_ARG)
++
++/*
++ * The 'dma_buf_map' structure is renamed to 'iosys_map' by the commit
++ * 7938f4218168 ("dma-buf-map: Rename to iosys-map").
++ */
++#if defined(NV_LINUX_IOSYS_MAP_H_PRESENT)
++typedef struct iosys_map nv_sysio_map_t;
++#else
++typedef struct dma_buf_map nv_sysio_map_t;
++#endif
++
+ static int nv_drm_gem_vmap(struct drm_gem_object *gem,
+-                           struct dma_buf_map *map)
++                           nv_sysio_map_t *map)
+ {
+     map->vaddr = nv_drm_gem_prime_vmap(gem);
+     if (map->vaddr == NULL) {
+@@ -79,7 +90,7 @@ static int nv_drm_gem_vmap(struct drm_ge
+ }
+ 
+ static void nv_drm_gem_vunmap(struct drm_gem_object *gem,
+-                              struct dma_buf_map *map)
++                              nv_sysio_map_t *map)
+ {
+     nv_drm_gem_prime_vunmap(gem, map->vaddr);
+     map->vaddr = NULL;

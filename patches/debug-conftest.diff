@@ -1,0 +1,11 @@
+--- a/conftest.sh
++++ b/conftest.sh
+@@ -335,7 +335,7 @@ compile_check_conftest() {
+     echo "$CONFTEST_PREAMBLE
+     $CODE" > conftest$$.c
+ 
+-    $CC $CFLAGS -c conftest$$.c > /dev/null 2>&1
++    $CC $CFLAGS -c conftest$$.c
+     rm -f conftest$$.c
+ 
+     if [ -f conftest$$.o ]; then
